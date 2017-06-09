@@ -1,14 +1,14 @@
 library(parallel)
 
-.oneGenePerturbations=function(gene, network, refEXP, targetEXP, delta=0){
-  # an empty list to return in case of error
+.oneGenePerturbations=function(gene, network, refEXP, targetEXP, delta=0, measure="perturbation"){
+  ##### an empty list to return in case of error
   l <- rep(0,length(rownames(targetEXP)))
   names(l) <- rownames(targetEXP)
   
-  #return the list of 0s is the gene is not found in the network
+  ##### return the list of 0s is the gene is not found in the network
   if(!(gene %in% targets(network))) return(l)
   
-  #return the list of 0s is the gene is not found in the expression dataset
+  ##### return the list of 0s is the gene is not found in the expression dataset
   if(!(gene %in% colnames(refEXP)) | !(gene %in% colnames(targetEXP)) ){
     print(paste("Couldn't compute perturbation for: ", gene, ". The gene was not found in the reference or the target expression data."))
     return(l)
@@ -16,35 +16,40 @@ library(parallel)
   
   print(paste("computing perturbations for gene ",gene))
   
-  # # ##### compute the RMSE and get the best GRN myself
+  ##### compute the RMSE and get the best GRN in case multiple networks exist for the same gene (the case of some regulatory network inference methods like HLICORN)
   # listedgrn <- data.frame(t(network@GRN[which(network@GRN$Target==gene),1:3]),stringsAsFactors=FALSE)
-  # # print("2")
   # results=lapply(listedgrn,.fitGRNcv,exp=refEXP)
   # # results=mclapply(listedgrn,.fitGRNcv,exp=refEXP, mc.cores = 2)
-  # # print("3")
   # bestgrn <- listedgrn[which.min(sapply(results,f <- function(x){return(unlist(x)["RMSE"])}))]
-  # # print(bestgrn)
   
-  #or take it directly from coregnet results
+  ##### or take it directly from networks infered with the hLicorn method using the CoRegNet R package (help saving computation time)
   listedgrn <- data.frame(network@GRN[which(network@GRN$Target==gene),],stringsAsFactors=FALSE)
-  # if(listedgrn$R2<=0.5) return(l)
-  # print(listedgrn[which.min(listedgrn$RMSE),]$RMSE)
   bestgrn <- t(listedgrn[which.min(listedgrn$RMSE),1:3])
-  # print(bestgrn)
   
-  # print("4")
+  ##### estimate the gene perturbation score 
   perturbation <-  .estimatePerturbation(grn = unlist(bestgrn), refexp = refEXP, targetexp=targetEXP)
   
+  ##### if an error occured (mainly the regulators of the network were not found in the expression data)
   if(is.null(perturbation)) return(l)
   
-  # set to 0 all perturbations for which the confidence is < then delta      Confidence, Confidence.perSample
+  ##### set to 0 all perturbations for which the confidence score is < then delta
   if (perturbation$Confidence < delta) return(l)
   
+  ##### it is possible also to cancel just the perturbation scores for only the sample that are < than delta  
   # refs_to_0 <- which(perturbation$Confidence.perSample < delta)
   # perturbation$Confidence.perSample[refs_to_0] <- 0
-  
-  return(perturbation$Target.perturbation)
-  # return(perturbation$Target.perturbationPercentage)
+
+  ##### we can provide values for perturbation (by default) and also for the percentage of perturbation, 
+  ##### the expected expression for the gene according to its regulatory network, per sample ot the average 
+  ##### confidence of the estimation, the RMSE and R2 of the model
+  return(switch(measure,
+                perturbation = perturbation$Target.perturbation,
+                perturbationPercentage = perturbation$Target.perturbationPercentage,
+                expectedExpression = perturbation$Target.pred,
+                confidencePerSample = perturbation$Confidence.perSample,
+                confidence = perturbation$Confidence,
+                rmse = perturbation$RMSE,
+                r2 = perturbation$R2))
 }
 
 
