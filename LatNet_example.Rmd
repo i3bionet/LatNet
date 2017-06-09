@@ -44,15 +44,10 @@ activity <- .regulatorActivity(GRN, cancerExp)
 ```{r}
 refData <- cancerExp
 targetData <- cancerExp
-ptm <- proc.time()
 allperturbations.raw <- t(simplify2array(mclapply(targets(GRN), .oneGenePerturbations, GRN, t(refData), t(targetData), 0)))#, mc.cores = 3
 rownames(allperturbations.raw) <- targets(GRN)
-nrow(allperturbations.raw)
 #remove the one having 0 everywhere
 allperturbations <- allperturbations.raw[-which(rowSums(allperturbations.raw)==0),]
-runtime <- proc.time() - ptm
-print(runtime)
-nrow(allperturbations)
 ```
 
 # Export all data if necessary
