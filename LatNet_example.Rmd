@@ -1,0 +1,805 @@
+---
+title: "LatNet analysis"
+output: html_notebook
+---
+
+# load test data from the CoRegNet package
+```{r}
+library(CoRegNet)
+data("CIT_BLCA_EXP")
+normal_samples <- which(grepl('^N', colnames(CIT_BLCA_EXP)))
+cancerExp <- CIT_BLCA_EXP[,-normal_samples]
+dim(cancerExp)
+```
+
+# load LatNet functions (YOU SHOULD SET YOUR OWN PATH)
+```{r}
+LatNet_Path <- '~/Documents/GitHub/LatNet/LatNet.R'
+source(LatNet_Path)
+```
+
+# Infer regulatory network for the genes. You can load your network structure directly if it has been obtained with different means 
+```{r}
+# perform the inference as discribed in the coregnet package
+# Load list of Human transcription factors
+data(HumanTF)
+ 
+# you can set the option parallel="multicore" to accelerate the inference in case you have a multicore computing infrastructure
+# Generate the network
+GRN <- hLICORN(numericalExpression=cancerExp,
+               TFlist = HumanTF,
+               # minGeneSupport = 0.2,
+               # minCoregSupport=0.2,
+               maxCoreg = 2,
+               verbose = TRUE,
+               parallel = "multicore")
+```
+
+generating influences
+```{r}
+influences <- .regulatorActivity(GRN, cancerExp)
+# inf <- regulatorInfluence(GRN, cancerExp)
+```
+
+heatmap with influences
+```{r}
+heatplot(influences[,names(CIT_BLCA_Subgroup)], groups = CIT_BLCA_Subgroup)
+heatplot(inf[,names(CIT_BLCA_Subgroup)], groups = CIT_BLCA_Subgroup)
+```
+
+generating perturbations
+```{r}
+refData <- cancerExp
+targetData <- cancerExp
+ptm <- proc.time()
+allperturbations.raw <- t(simplify2array(mclapply(targets(GRN), .oneGenePerturbations, GRN, t(refData), t(targetData), 0)))#, mc.cores = 3
+rownames(allperturbations.raw) <- targets(GRN)
+nrow(allperturbations.raw)
+#remove the one having 0 everywhere
+allperturbations <- allperturbations.raw[-which(rowSums(allperturbations.raw)==0),]
+runtime <- proc.time() - ptm
+print(runtime)
+nrow(allperturbations)
+```
+
+Export all data if necessary
+```{r}
+
+ds1 <- t(cancerExp[c(targets(GRN), names(regulators(GRN))),names(CIT_BLCA_Subgroup)])
+ds1 <- data.frame("subtype"=CIT_BLCA_Subgroup, ds1)
+
+ds2 <- t(influences[,names(CIT_BLCA_Subgroup)])
+ds2 <- data.frame("subtype"=CIT_BLCA_Subgroup, ds2)
+
+ds3 <- t(allperturbations[,names(CIT_BLCA_Subgroup)])
+ds3 <- data.frame("subtype"=CIT_BLCA_Subgroup, ds3)
+
+write.csv(ds1, file = "/Users/dhifli/UsexpressionsAllCIT.csv")
+write.csv(ds2, file = "/Users/dhifli/influencesAllCIT.csv")
+write.csv(ds3, file = "/Users/dhifli/perturbationsAllCIT.csv")
+```
+
+heatmap with perturbations
+```{r}
+heatplot(allperturbations[,names(CIT_BLCA_Subgroup)], groups = CIT_BLCA_Subgroup)
+```
+
+get only basal and luminals from Coregnet package
+```{r}
+data("CIT_BLCA_Subgroup")
+annot_basal_luminal <- CIT_BLCA_Subgroup#[CIT_BLCA_Subgroup %in% c("basal-like", "luminal-1", "luminal-2")]
+
+cit_exp_basal_luminal <- cancerExp#[,names(annot_basal_luminal)]
+```
+
+heatmap of the expression
+```{r}
+require(RColorBrewer)
+mypalette<-RColorBrewer::brewer.pal(length(unique(annot_basal_luminal)),"Set3")
+annot_colors <- mypalette[as.numeric(annot_basal_luminal)]
+
+.distfun=function(x) as.dist((1 - cor(t(x))) )
+# .distfun= function(x) dist(x,method="maximum")
+.hclustfun = function(d) hclust(d,method="ward.D2")
+# .hclustfun = function(d) hclust(d,method="complete")
+
+par(mfrow=c(1,2))
+heatmap.2(t(cit_exp_basal_luminal), distfun=.distfun,hclustfun=.hclustfun, RowSideColors = annot_colors
+          , trace="none", cexRow=0.5
+          , scale="column", dendrogram="col", Rowv = FALSE
+          #, breaks= quantile(as.vector(t(cit_exp_basal_luminal)),probs=seq(0,1,by=1/75))
+          )
+par(lend = 1)
+legend("topright",      # location of the legend on the heatmap plot
+    legend = unique(annot_basal_luminal), # category labels
+    col = unique(annot_colors),  # color key
+    lty= 1,             # line style
+    lwd = 10            # line width
+)
+```
+
+
+heatmap of the influence
+```{r}
+require(RColorBrewer)
+mypalette<-RColorBrewer::brewer.pal(length(unique(annot_basal_luminal)),"Set3")
+annot_colors <- mypalette[as.numeric(annot_basal_luminal)]
+
+.distfun=function(x) as.dist((1 - cor(t(x))) )
+# .distfun= function(x) dist(x,method="euclidean")
+.hclustfun = function(d) hclust(d,method="ward.D2")
+# .hclustfun = function(d) hclust(d,method="centroid")
+
+par(mfrow=c(1,2))
+heatmap.2(t(influences[,names(annot_basal_luminal)]), distfun=.distfun,hclustfun=.hclustfun, RowSideColors = annot_colors
+          , trace="none", cexRow=0.5
+          # , scale="column"
+          , dendrogram="col", Rowv = FALSE
+          , breaks= unique(quantile(as.vector(t(influences[,names(annot_basal_luminal)])),probs=seq(0,1,by=1/75)))
+          )
+par(lend = 1)
+legend("topright",      # location of the legend on the heatmap plot
+    legend = unique(annot_basal_luminal), # category labels
+    col = unique(annot_colors),  # color key
+    lty= 1,             # line style
+    lwd = 10            # line width
+)
+```
+
+
+heatmap of the perturbations
+```{r}
+require(RColorBrewer)
+mypalette<-RColorBrewer::brewer.pal(length(unique(annot_basal_luminal)),"Set3")
+annot_colors <- mypalette[as.numeric(annot_basal_luminal)]
+
+topN <- 30
+g1 <- head(names(sort(rowMeans(allperturbations[,names(CIT_BLCA_Subgroup[CIT_BLCA_Subgroup==unique(CIT_BLCA_Subgroup)[1]])]), decreasing = TRUE)), topN)
+g2 <- head(names(sort(rowMeans(allperturbations[,names(CIT_BLCA_Subgroup[CIT_BLCA_Subgroup==unique(CIT_BLCA_Subgroup)[2]])]), decreasing = TRUE)), topN)
+g3 <- head(names(sort(rowMeans(allperturbations[,names(CIT_BLCA_Subgroup[CIT_BLCA_Subgroup==unique(CIT_BLCA_Subgroup)[3]])]), decreasing = TRUE)), topN)
+g4 <- head(names(sort(rowMeans(allperturbations[,names(CIT_BLCA_Subgroup[CIT_BLCA_Subgroup==unique(CIT_BLCA_Subgroup)[4]])]), decreasing = TRUE)), topN)
+
+top_p_genes <- unique(c(g1,g2,g3,g4))
+top_p_genes <- names(which(rowMeans(abs(allperturbations))>=quantile(rowMeans(abs(allperturbations)))["75%"]))
+
+.distfun=function(x) as.dist((1 - cor(t(x))) )
+# .distfun= function(x) dist(x,method="maximum")
+.hclustfun = function(d) hclust(d,method="ward.D2")
+# .hclustfun = function(d) hclust(d,method="complete")
+
+par(mfrow=c(1,2))
+heatmap.2(t(allperturbations[top_p_genes,names(annot_basal_luminal)]), distfun=.distfun,hclustfun=.hclustfun, RowSideColors = annot_colors
+          , trace="none", cexRow=0.5
+          # , scale="column"
+          # , dendrogram="col", Rowv = FALSE
+          # , breaks= quantile(as.vector(t(allperturbations.raw[,names(annot_basal_luminal)])),probs=seq(0,1,by=1/75))
+          )
+par(lend = 1)
+legend("topright",      # location of the legend on the heatmap plot
+    legend = unique(annot_basal_luminal), # category labels
+    col = unique(annot_colors),  # color key
+    lty= 1,             # line style
+    lwd = 10            # line width
+)
+```
+
+classification using cca with the expression
+```{r}
+#CIT_BLCA_Subgroup[CIT_BLCA_Subgroup %in% c("basal-like", "luminal-1", "luminal-2")]
+cancer_luminal1 <- cancerExp[,names(CIT_BLCA_Subgroup[CIT_BLCA_Subgroup =="luminal-1"])]
+cancer_luminal2 <- cancerExp[,names(CIT_BLCA_Subgroup[CIT_BLCA_Subgroup =="luminal-2"])]
+cancer_basal <- cancerExp[,names(CIT_BLCA_Subgroup[CIT_BLCA_Subgroup =="basal-like"])]
+
+library(mixOmics)
+#plot rcca
+linn.res <- rcc(cancer_luminal1, cancer_luminal2)
+plotVar(linn.res)
+
+linn.res <- rcc(cancer_luminal1, cancer_basal)
+plotVar(linn.res)
+
+linn.res <- rcc(cancer_luminal2, cancer_basal)
+plotVar(linn.res)
+```
+
+
+classification using cca with the influence
+```{r}
+#CIT_BLCA_Subgroup[CIT_BLCA_Subgroup %in% c("basal-like", "luminal-1", "luminal-2")]
+cancer_luminal1 <- influences[,names(CIT_BLCA_Subgroup[CIT_BLCA_Subgroup =="luminal-1"])]
+cancer_luminal2 <- influences[,names(CIT_BLCA_Subgroup[CIT_BLCA_Subgroup =="luminal-2"])]
+cancer_basal <- influences[,names(CIT_BLCA_Subgroup[CIT_BLCA_Subgroup =="basal-like"])]
+
+library(mixOmics)
+#plot rcca
+linn.res <- rcc(cancer_luminal1, cancer_luminal2)
+plotVar(linn.res)
+
+linn.res <- rcc(cancer_luminal1, cancer_basal)
+plotVar(linn.res)
+
+linn.res <- rcc(cancer_luminal2, cancer_basal)
+plotVar(linn.res)
+```
+
+classification using cca with the perturbation
+```{r}
+#CIT_BLCA_Subgroup[CIT_BLCA_Subgroup %in% c("basal-like", "luminal-1", "luminal-2")]
+cancer_luminal1 <- allperturbations[top_p_genes,names(CIT_BLCA_Subgroup[CIT_BLCA_Subgroup =="luminal-1"])]
+cancer_luminal2 <- allperturbations[top_p_genes,names(CIT_BLCA_Subgroup[CIT_BLCA_Subgroup =="luminal-2"])]
+cancer_basal <- allperturbations[top_p_genes,names(CIT_BLCA_Subgroup[CIT_BLCA_Subgroup =="basal-like"])]
+
+library(mixOmics)
+#plot rcca
+linn.res <- rcc(cancer_luminal1, cancer_luminal2)
+plotVar(linn.res)
+
+linn.res <- rcc(cancer_luminal1, cancer_basal)
+plotVar(linn.res)
+
+linn.res <- rcc(cancer_luminal2, cancer_basal)
+plotVar(linn.res)
+```
+
+classification using classifiers with the expression
+```{r}
+ds1 <- t(CIT_BLCA_EXP[c(targets(GRN), names(regulators(GRN))),names(CIT_BLCA_Subgroup)])
+ds1 <- data.frame("subtype"=CIT_BLCA_Subgroup, ds1)
+
+ds2 <- t(influences[,names(CIT_BLCA_Subgroup)])
+ds2 <- data.frame("subtype"=CIT_BLCA_Subgroup, ds2)
+
+ds3 <- t(allperturbations[,names(CIT_BLCA_Subgroup)])
+ds3 <- data.frame("subtype"=CIT_BLCA_Subgroup, ds3)
+
+library(caret)
+fitControl <- trainControl(## 5-fold CV
+                           method = "cv",
+                           number = 5
+                           # ,summaryFunction = prSummary
+                          )
+
+set.seed(825)
+model1 <- train(subtype ~ ., data = ds1, 
+                 method = "svmRadial", 
+                 trControl = fitControl,
+                 ## This last option is actually one
+                 ## for gbm() that passes through
+                 verbose = TRUE)
+
+model2 <- train(subtype ~ ., data = ds2, 
+                 method = "svmRadial", 
+                 trControl = fitControl,
+                 ## This last option is actually one
+                 ## for gbm() that passes through
+                 verbose = TRUE)
+
+model3 <- train(subtype ~ ., data = ds3, 
+                 method = "svmRadial", 
+                 trControl = fitControl,
+                 ## This last option is actually one
+                 ## for gbm() that passes through
+                 verbose = TRUE)
+
+```
+
+classification using classifiers with the expression
+```{r}
+ds1 <- t(exp[c(targets(GRN), names(regulators(GRN))),names(CIT_BLCA_Subgroup)])#c(rownames(influences), rownames(allperturbations))
+ds1 <- data.frame("subtype"=CIT_BLCA_Subgroup, ds1)
+
+library(ggplot2)
+library(MASS)
+library(caret)
+lda1 <- lda(formula = subtype ~ ., data = ds1)
+ldapred1 <- predict(lda1, ds1)
+ggplot(as.data.frame(cbind(ldapred1$x[,"LD1"],ldapred1$x[,"LD2"],ldapred1$class)), aes (x = ldapred1$x[,"LD1"], y = ldapred1$x[,"LD2"], colour = ldapred1$class)) + geom_point(aes(ldapred1$x[,"LD1"], ldapred1$x[,"LD2"], colour = ldapred1$class, shape = ds1$subtype), size = 2.5) + labs(x=paste("LD1 (66%)"), y=paste("LD2 (26%)"), colour = "Predicted Subtype", shape = "True Subtype", title = "Gene Expression Signals") + stat_density2d ()
+confusionMatrix(ldapred1$class, ds1$subtype)
+# library(ModelMetrics)
+# real <- ds1$subtype
+# prediction <- ldapred1$class
+# paste0("number of errors: ",ce(real, prediction)*length(real))
+# paste0("Accuracy: ", 1-ce(real, prediction))
+# paste0("F1-score: ", f1Score(real, prediction))
+# paste0("Precision (postive predictive value): ", ppv(real, prediction))
+# paste0("NPV (negative predictive value): ", npv(real, prediction))
+# paste0("Sensitivity (recall, true positive rate): ", recall(real, prediction))
+# paste0("Specificity (true negative rate): ", tnr(real, prediction))
+```
+
+classification using classifiers with the influence
+```{r}
+
+ds2 <- t(influences[,names(CIT_BLCA_Subgroup)])
+ds2 <- data.frame("subtype"=CIT_BLCA_Subgroup, ds2)
+
+library(ggplot2)
+library(MASS)
+library(caret)
+
+lda2 <- lda(formula = subtype ~ ., data = ds2)
+ldapred2 <- predict(lda2, ds2)
+ggplot(as.data.frame(cbind(ldapred2$x[,"LD1"],ldapred2$x[,"LD2"],ldapred2$class)), aes (x = ldapred2$x[,"LD1"], y = ldapred2$x[,"LD2"], colour = ldapred2$class)) + geom_point(aes(ldapred2$x[,"LD1"], ldapred2$x[,"LD2"], colour = ldapred2$class, shape = ds2$subtype), size = 2.5) + labs(x=paste("LD1 (63%)"), y=paste("LD2 (26%)"), colour = "Predicted Subtype", shape = "True Subtype", title = "Regulator Activity Signals") + stat_density2d ()
+confusionMatrix(ldapred2$class, ds2$subtype)
+# real <- ds2$subtype
+# prediction <- ldapred2$class
+# paste0("number of errors: ",ce(real, prediction)*length(real))
+# paste0("Accuracy: ", 1-ce(real, prediction))
+# paste0("F1-score: ", f1Score(real, prediction))
+# paste0("Precision (postive predictive value): ", ppv(real, prediction))
+# paste0("NPV (negative predictive value): ", npv(real, prediction))
+# paste0("Sensitivity (recall, true positive rate): ", recall(real, prediction))
+# paste0("Specificity (true negative rate): ", tnr(real, prediction))
+```
+
+classification using classifiers with the perturbation
+```{r}
+# topN <- 50
+# g1 <- head(names(sort(rowMeans(allperturbations[,names(CIT_BLCA_Subgroup[CIT_BLCA_Subgroup==unique(CIT_BLCA_Subgroup)[1]])]), decreasing = TRUE)), topN)
+# g2 <- head(names(sort(rowMeans(allperturbations[,names(CIT_BLCA_Subgroup[CIT_BLCA_Subgroup==unique(CIT_BLCA_Subgroup)[2]])]), decreasing = TRUE)), topN)
+# g3 <- head(names(sort(rowMeans(allperturbations[,names(CIT_BLCA_Subgroup[CIT_BLCA_Subgroup==unique(CIT_BLCA_Subgroup)[3]])]), decreasing = TRUE)), topN)
+# g4 <- head(names(sort(rowMeans(allperturbations[,names(CIT_BLCA_Subgroup[CIT_BLCA_Subgroup==unique(CIT_BLCA_Subgroup)[4]])]), decreasing = TRUE)), topN)
+# 
+# top_p_genes <- unique(c(g1,g2,g3,g4))
+# top_p_genes <- head(names(sort(rowSums(allperturbations), decreasing = TRUE)), 200)
+top_p_genes <- names(which(rowMeans(abs(allperturbations))>=quantile(rowMeans(abs(allperturbations)))["75%"]))
+
+ds3 <- t(allperturbations[top_p_genes,names(CIT_BLCA_Subgroup)])
+ds3 <- data.frame("subtype"=CIT_BLCA_Subgroup, ds3)
+
+library(ggplot2)
+library(MASS)
+library(caret)
+
+lda3 <- lda(formula = subtype ~ ., data = ds3)
+ldapred3 <- predict(lda3, ds3)
+ggplot(as.data.frame(cbind(ldapred3$x[,"LD1"],ldapred3$x[,"LD2"],ldapred3$class)), aes (x = ldapred3$x[,"LD1"], y = ldapred3$x[,"LD2"], colour = ldapred3$class)) + geom_point(aes(ldapred3$x[,"LD1"], ldapred3$x[,"LD2"], colour = ldapred3$class, shape = ds3$subtype), size = 2.5) + labs(x=paste("LD1 (54%)"), y=paste("LD2 (27%)"), colour = "Predicted Subtype", shape = "True Subtype", title = "Gene Perturbation Signals") + stat_density2d ()
+confusionMatrix(ldapred3$class, ds3$subtype)
+# real <- ds3$subtype
+# prediction <- ldapred3$class
+# paste0("number of errors: ",ce(real, prediction)*length(real))
+# paste0("Accuracy: ", 1-ce(real, prediction))
+# paste0("F1-score: ", f1Score(real, prediction))
+# paste0("Precision (postive predictive value): ", ppv(real, prediction))
+# paste0("NPV (negative predictive value): ", npv(real, prediction))
+# paste0("Sensitivity (recall, true positive rate): ", recall(real, prediction))
+# paste0("Specificity (true negative rate): ", tnr(real, prediction))
+```
+
+
+
+classification using nearest shrunken centroids with the expression
+```{r}
+library(pamr)
+khan.data <- list(x=exp[c(targets(GRN), names(regulators(GRN))),names(CIT_BLCA_Subgroup)],y=CIT_BLCA_Subgroup)
+
+khan.data <- list(x=influences[,names(CIT_BLCA_Subgroup)],y=CIT_BLCA_Subgroup)
+
+top_p_genes <- names(which(rowMeans(abs(allperturbations))>=quantile(rowMeans(abs(allperturbations)))["75%"]))
+khan.data <- list(x=allperturbations[top_p_genes,names(CIT_BLCA_Subgroup)],y=CIT_BLCA_Subgroup)
+
+# # interactive analysis
+# pamr.menu(khan.data)
+
+## Train the classifier
+khan.trn <- pamr.train(khan.data)
+## look for the threshold
+khan.scales <- pamr.adaptthresh(khan.trn)
+khan.train <- pamr.train(khan.data, threshold.scale=khan.scales)
+
+## Type name of object to see the results
+khan.train
+
+## Cross-validate the classifier
+khan.results<- pamr.cv(khan.train, khan.data)
+khan.results
+
+## Plot the cross-validated error curves
+pamr.plotcv(khan.results)
+
+thresh=0.3
+
+## Compute the confusion matrix for a particular model (threshold=4.0) 
+pamr.confusion(khan.results, threshold=thresh)
+
+## Plot the cross-validated class probabilities by class
+pamr.plotcvprob(khan.results, khan.data, threshold=thresh)
+
+## Plot the class centroids
+pamr.plotcen(khan.train, khan.data, threshold=thresh)
+
+## Make a gene plot of the most significant genes
+pamr.geneplot(khan.train, khan.data, threshold=thresh)
+
+
+# Estimate false discovery rates and plot them
+fdr.obj<- pamr.fdr(khan.train, khan.data)
+
+pamr.plotfdr(fdr.obj)
+
+## List the significant genes
+pamr.listgenes(khan.train, khan.data, threshold=thresh)
+```
+
+
+Per subtype raking - influence
+```{r}
+topN <- 10
+r1 <- head(names(sort(rowMeans(influences[,names(CIT_BLCA_Subgroup[CIT_BLCA_Subgroup==unique(CIT_BLCA_Subgroup)[1]])]), decreasing = TRUE)), topN)
+r2 <- head(names(sort(rowMeans(influences[,names(CIT_BLCA_Subgroup[CIT_BLCA_Subgroup==unique(CIT_BLCA_Subgroup)[2]])]), decreasing = TRUE)), topN)
+r3 <- head(names(sort(rowMeans(influences[,names(CIT_BLCA_Subgroup[CIT_BLCA_Subgroup==unique(CIT_BLCA_Subgroup)[3]])]), decreasing = TRUE)), topN)
+r4 <- head(names(sort(rowMeans(influences[,names(CIT_BLCA_Subgroup[CIT_BLCA_Subgroup==unique(CIT_BLCA_Subgroup)[4]])]), decreasing = TRUE)), topN)
+paste0("top-",topN," regulators for ",unique(CIT_BLCA_Subgroup)[1], " are : " )
+paste0(r1)
+paste0("top-",topN," regulators for ",unique(CIT_BLCA_Subgroup)[2], " are : " )
+paste0(r2)
+paste0("top-",topN," regulators for ",unique(CIT_BLCA_Subgroup)[3], " are : " )
+paste0(r3)
+paste0("top-",topN," regulators for ",unique(CIT_BLCA_Subgroup)[4], " are : " )
+paste0(r4)
+
+#overall perturbations
+head(names(sort(rowMeans(influences), decreasing = TRUE)), topN)
+```
+
+
+Per subtype raking - perturbation
+```{r}
+topN <- 10
+g1 <- head(names(sort(rowMeans(abs(allperturbations[,names(CIT_BLCA_Subgroup[CIT_BLCA_Subgroup==unique(CIT_BLCA_Subgroup)[1]])])), decreasing = TRUE)), topN)
+g2 <- head(names(sort(rowMeans(abs(allperturbations[,names(CIT_BLCA_Subgroup[CIT_BLCA_Subgroup==unique(CIT_BLCA_Subgroup)[2]])])), decreasing = TRUE)), topN)
+g3 <- head(names(sort(rowMeans(abs(allperturbations[,names(CIT_BLCA_Subgroup[CIT_BLCA_Subgroup==unique(CIT_BLCA_Subgroup)[3]])])), decreasing = TRUE)), topN)
+g4 <- head(names(sort(rowMeans(abs(allperturbations[,names(CIT_BLCA_Subgroup[CIT_BLCA_Subgroup==unique(CIT_BLCA_Subgroup)[4]])])), decreasing = TRUE)), topN)
+paste0("top-",topN," genes for ",unique(CIT_BLCA_Subgroup)[1], " are : " )
+paste0(g1)
+paste0("top-",topN," genes for ",unique(CIT_BLCA_Subgroup)[2], " are : " )
+paste0(g2)
+paste0("top-",topN," genes for ",unique(CIT_BLCA_Subgroup)[3], " are : " )
+paste0(g3)
+paste0("top-",topN," genes for ",unique(CIT_BLCA_Subgroup)[4], " are : " )
+paste0(g4)
+
+#overall perturbations
+head(names(sort(rowMeans(abs(allperturbations)), decreasing = TRUE)), topN)
+```
+
+comparative network analysis Influence
+```{r}
+# #create the network
+# library("psych")
+library("qgraph")
+
+luminal1_refs <- names(CIT_BLCA_Subgroup[CIT_BLCA_Subgroup==unique(CIT_BLCA_Subgroup)[1]])
+luminal2_refs <- names(CIT_BLCA_Subgroup[CIT_BLCA_Subgroup==unique(CIT_BLCA_Subgroup)[2]])
+basallike_refs <- names(CIT_BLCA_Subgroup[CIT_BLCA_Subgroup==unique(CIT_BLCA_Subgroup)[3]])
+tcga4_refs <- names(CIT_BLCA_Subgroup[CIT_BLCA_Subgroup==unique(CIT_BLCA_Subgroup)[4]])
+
+
+
+cormatInf <- cor(t(influences[,names(CIT_BLCA_Subgroup)]))
+diag(cormatInf) <- 0
+cormatInf[cormatInf<0.75] <- 0
+
+# , minimum = 0.1, cut = 0.95
+# qgraph(cormatInf, layout = "spring", scores = rowMeans(influences)[V(g1)], color="red", vsize=8, repulsion = 0.55)
+
+qgInf <- qgraph(cormatInf, layout = "spring", repulsion = 0.55, vsize=8, color="red", cut = 0.95, labels=rownames(cormatInf), theme="TeamFortress")
+
+par(mfrow=c(2,2))
+
+
+qgraph(qgInf, scores = rowMeans(influences[,luminal1_refs])[qgInf$graphAttributes$Nodes$labels])
+title("Luminal-1", line = 2, cex.main = 2.5)
+
+qgraph(qgInf, scores = rowMeans(influences[,luminal2_refs])[qgInf$graphAttributes$Nodes$labels])
+title("Luminal-2", line = 2, cex.main = 2.5)
+
+qgraph(qgInf, layout = "spring", scores = rowMeans(influences[,basallike_refs])[qgInf$graphAttributes$Nodes$labels])
+title("Basal-like", line = 2, cex.main = 2.5)
+
+qgraph(qgInf, layout = "spring", scores = rowMeans(influences[,tcga4_refs])[qgInf$graphAttributes$Nodes$labels])
+title("TCGA-4", line = 2, cex.main = 2.5)
+
+# library("ppcor")
+# pcormatInf <- pcor(t(influences[,names(CIT_BLCA_Subgroup)]))
+# diag(pcormatInf) <- 0
+# pcormatInf[pcormatInf<0.85] <- 0
+
+# corGraph <- qgraph(cormatInf, layout = "spring", graph = "pcor", nodeNames = rownames(cormatInf), cut = 0.3, maximum = 1, minimum = 0, esize = 20, legend.cex = 0.3, vsize = 3, repulsion = 0.8)#, groups = Groups
+# 
+# library(igraph)
+# g1 <- graph.adjacency(cormatInf, mode = "lower", weighted = TRUE)
+# vcount(g1)
+# ecount(g1)
+# 
+# V(g1)$size <- rowMeans(influences)[V(g1)]*3
+# par(mfrow=c(1,2))
+# # plot(g1,vertex.size=5)
+# plot.igraph(g1, layout=layout.lgl(g1,repulserad=0.1), vertex.label.cex=1, vertex.label.degree=-pi/2)
+# 
+# plot.igraph(g1, layout=layout.fruchterman.reingold(g1, niter = 1000, area=10*vcount(g1)^2), vertex.label.cex=1, vertex.label.dist=0.5)
+# 
+# qgraph(cormatInf, layout = "spring", graph = "pcor", cut = 0.3, esize = 20, vsize = rowMeans(influences)[V(g1)], repulsion = 0.8)#, nodeNames = rownames(cormatInf)
+# plot(g1,layout=l)
+
+# qgraph(cormatInf, minimum = 0.9, cut = 0.9, layout = "spring", scores = rowMeans(influences)[V(g1)], repulsion = 0.4, vsize=6, color="red")
+# # palf <- colorRampPalette(c(rgb(1,1,1, .2),rgb(.8,0,0, .7)), alpha=TRUE)
+# 
+# 
+# layouts <- grep("^layout_", ls("package:igraph"), value=TRUE)[-1] 
+# layouts <- layouts[!grepl("bipartite|merge|norm|sugiyama|tree|with_dh|randomly|kk|grid", layouts)]
+# 
+# par(mfrow=c(3,3), mar=c(1,1,1,1))
+# 
+# for (layout in layouts) {
+# 
+#   print(layout)
+# 
+#   l <- do.call(layout, list(g1)) 
+# 
+#   plot(g1, edge.arrow.mode=0, layout=l, main=layout) }
+
+
+```
+
+
+comparative network analysis Perturbation tests
+```{r}
+# #create the network
+# library("psych")
+library("qgraph")
+
+luminal1_refs <- names(CIT_BLCA_Subgroup[CIT_BLCA_Subgroup==unique(CIT_BLCA_Subgroup)[1]])
+luminal2_refs <- names(CIT_BLCA_Subgroup[CIT_BLCA_Subgroup==unique(CIT_BLCA_Subgroup)[2]])
+basallike_refs <- names(CIT_BLCA_Subgroup[CIT_BLCA_Subgroup==unique(CIT_BLCA_Subgroup)[3]])
+tcga4_refs <- names(CIT_BLCA_Subgroup[CIT_BLCA_Subgroup==unique(CIT_BLCA_Subgroup)[4]])
+
+allperturbations_scaled <- scale(abs(allperturbations))
+library(DMwR)
+# allperturbations_scaled <- SoftMax(abs(allperturbations)))
+
+# allperturbations_scaled[allperturbations_scaled>0] <- exp(allperturbations_scaled[allperturbations_scaled>0])
+# allperturbations_scaled[allperturbations_scaled<0] <- -exp(abs(allperturbations_scaled[allperturbations_scaled<0]))
+# allperturbations_scaled <- scale(allperturbations_scaled)
+
+
+# allperturbations_scaled <- scale((abs(allperturbations)))
+
+# 
+topN <- 25
+g1 <- head(names(sort(rowMeans((allperturbations_scaled[,luminal1_refs])), decreasing = TRUE)), topN)
+g2 <- head(names(sort(rowMeans((allperturbations_scaled[,luminal2_refs])), decreasing = TRUE)), topN)
+g3 <- head(names(sort(rowMeans((allperturbations_scaled[,basallike_refs])), decreasing = TRUE)), topN)
+g4 <- head(names(sort(rowMeans((allperturbations_scaled[,tcga4_refs])), decreasing = TRUE)), topN)
+top_p_genes <- unique(c(g1,g2,g3,g4))
+# top_p_genes <- head(names(which(rowMeans((allperturbations_scaled))>=quantile(rowMeans((allperturbations_scaled)))["75%"])), 100)
+
+cormatpert <- cor(t(allperturbations_scaled[top_p_genes,names(CIT_BLCA_Subgroup)]))
+diag(cormatpert) <- 0
+cormatpert[cormatpert<0.1] <- 0
+
+# groups <- rep("A",length(rownames(cormatpert)))
+# names(groups) <- rownames(cormatpert)
+# groups[which(rowMeans(allperturbations_scaled[top_p_genes,])<0)] <- "B"
+qgpert <- qgraph(cormatpert, layout = "spring", scores = (rowMeans(allperturbations_scaled[top_p_genes,])[rownames(cormatpert)]),
+                 labels=rownames(cormatpert), theme="TeamFortress", vsize=8, color="darkorange", repulsion = 1)#, groups=as.vector(groups), cut = 0.95
+
+par(mfrow=c(2,2))
+
+qgraph(qgpert, scores = rowMeans((allperturbations_scaled[top_p_genes,luminal1_refs]))[qgpert$graphAttributes$Nodes$labels])
+title("Luminal-1", line = 2, cex.main = 2.5)
+
+qgraph(qgpert, scores = rowMeans((allperturbations_scaled[top_p_genes,luminal2_refs]))[qgpert$graphAttributes$Nodes$labels])
+title("Luminal-2", line = 2, cex.main = 2.5)
+
+qgraph(qgpert, layout = "spring", scores = rowMeans((allperturbations_scaled[top_p_genes,basallike_refs]))[qgpert$graphAttributes$Nodes$labels])
+title("Basal-like", line = 2, cex.main = 2.5)
+
+qgraph(qgpert, layout = "spring", scores = rowMeans((allperturbations_scaled[top_p_genes,tcga4_refs]))[qgpert$graphAttributes$Nodes$labels])
+title("TCGA-4", line = 2, cex.main = 2.5)
+
+
+```
+
+comparative network analysis Perturbation
+```{r}
+# #create the network
+# library("psych")
+library("qgraph")
+
+luminal1_refs <- names(CIT_BLCA_Subgroup[CIT_BLCA_Subgroup==unique(CIT_BLCA_Subgroup)[1]])
+luminal2_refs <- names(CIT_BLCA_Subgroup[CIT_BLCA_Subgroup==unique(CIT_BLCA_Subgroup)[2]])
+basallike_refs <- names(CIT_BLCA_Subgroup[CIT_BLCA_Subgroup==unique(CIT_BLCA_Subgroup)[3]])
+tcga4_refs <- names(CIT_BLCA_Subgroup[CIT_BLCA_Subgroup==unique(CIT_BLCA_Subgroup)[4]])
+
+allperturbations_scaled <- allperturbations
+# allperturbations_scaled[allperturbations_scaled>0] <- exp(allperturbations_scaled[allperturbations_scaled>0])
+# allperturbations_scaled[allperturbations_scaled<0] <- -exp(abs(allperturbations_scaled[allperturbations_scaled<0]))
+# allperturbations_scaled <- scale(allperturbations_scaled)
+
+
+# allperturbations_scaled <- scale((abs(allperturbations)))
+
+# 
+topN <- 50
+g1 <- head(names(sort(rowMeans(abs(allperturbations_scaled[,luminal1_refs])), decreasing = TRUE)), topN)
+g2 <- head(names(sort(rowMeans(abs(allperturbations_scaled[,luminal2_refs])), decreasing = TRUE)), topN)
+g3 <- head(names(sort(rowMeans(abs(allperturbations_scaled[,basallike_refs])), decreasing = TRUE)), topN)
+g4 <- head(names(sort(rowMeans(abs(allperturbations_scaled[,tcga4_refs])), decreasing = TRUE)), topN)
+top_p_genes <- unique(c(g1,g2,g3,g4))
+# top_p_genes <- head(names(which(rowMeans((allperturbations_scaled))>=quantile(rowMeans((allperturbations_scaled)))["75%"])), 100)
+
+cormatpert <- cor(t(allperturbations_scaled[top_p_genes,names(CIT_BLCA_Subgroup)]))
+diag(cormatpert) <- 0
+cormatpert[cormatpert<0.2] <- 0
+
+# groups <- rep("A",length(rownames(cormatpert)))
+# names(groups) <- rownames(cormatpert)
+# groups[which(rowMeans(allperturbations_scaled[top_p_genes,])<0)] <- "B"
+qgpert <- qgraph(cormatpert, layout = "spring", scores = (rowMeans(allperturbations_scaled[top_p_genes,])[rownames(cormatpert)]),
+                 labels=rownames(cormatpert), theme="TeamFortress", vsize=8, color="darkorange", repulsion = 1)#, groups=as.vector(groups), cut = 0.95
+
+par(mfrow=c(2,2))
+
+qgraph(qgpert, scores = rowMeans(abs(allperturbations_scaled[top_p_genes,luminal1_refs]))[qgpert$graphAttributes$Nodes$labels])
+title("Luminal-1", line = 2, cex.main = 2.5)
+
+qgraph(qgpert, scores = rowMeans(abs(allperturbations_scaled[top_p_genes,luminal2_refs]))[qgpert$graphAttributes$Nodes$labels])
+title("Luminal-2", line = 2, cex.main = 2.5)
+
+qgraph(qgpert, layout = "spring", scores = rowMeans(abs(allperturbations_scaled[top_p_genes,basallike_refs]))[qgpert$graphAttributes$Nodes$labels])
+title("Basal-like", line = 2, cex.main = 2.5)
+
+qgraph(qgpert, layout = "spring", scores = rowMeans(abs(allperturbations_scaled[top_p_genes,tcga4_refs]))[qgpert$graphAttributes$Nodes$labels])
+title("TCGA-4", line = 2, cex.main = 2.5)
+
+
+```
+
+
+comparative network analysis Perturbation by groups
+```{r}
+# #create the network
+# library("psych")
+library("qgraph")
+
+luminal1_refs <- names(CIT_BLCA_Subgroup[CIT_BLCA_Subgroup==unique(CIT_BLCA_Subgroup)[1]])
+luminal2_refs <- names(CIT_BLCA_Subgroup[CIT_BLCA_Subgroup==unique(CIT_BLCA_Subgroup)[2]])
+basallike_refs <- names(CIT_BLCA_Subgroup[CIT_BLCA_Subgroup==unique(CIT_BLCA_Subgroup)[3]])
+tcga4_refs <- names(CIT_BLCA_Subgroup[CIT_BLCA_Subgroup==unique(CIT_BLCA_Subgroup)[4]])
+
+allperturbations_scaled <- scale(allperturbations)
+# allperturbations_scaled[allperturbations_scaled>0] <- exp(allperturbations_scaled[allperturbations_scaled>0])
+# allperturbations_scaled[allperturbations_scaled<0] <- -exp(abs(allperturbations_scaled[allperturbations_scaled<0]))
+# allperturbations_scaled <- scale(allperturbations_scaled)
+
+
+# allperturbations_scaled <- scale(exp(abs(allperturbations)))
+library(DMwR)
+# allperturbations_scaled <- SoftMax((allperturbations))
+# 
+topN <- 25
+g1 <- c(head(names(sort(rowMeans((allperturbations_scaled[,luminal1_refs])), decreasing = TRUE)), topN), head(names(sort(rowMeans((allperturbations_scaled[,luminal1_refs])), decreasing = FALSE)), topN))
+g2 <- c(head(names(sort(rowMeans((allperturbations_scaled[,luminal2_refs])), decreasing = TRUE)), topN),head(names(sort(rowMeans((allperturbations_scaled[,luminal2_refs])), decreasing = FALSE)), topN))
+g3 <- c(head(names(sort(rowMeans((allperturbations_scaled[,basallike_refs])), decreasing = TRUE)), topN),head(names(sort(rowMeans((allperturbations_scaled[,basallike_refs])), decreasing = FALSE)), topN))
+g4 <- c(head(names(sort(rowMeans((allperturbations_scaled[,tcga4_refs])), decreasing = TRUE)), topN),head(names(sort(rowMeans((allperturbations_scaled[,tcga4_refs])), decreasing = FALSE)), topN))
+# g1 <- head(names(sort(rowMeans((allperturbations_scaled[,luminal1_refs])), decreasing = TRUE)), topN)
+# g2 <- head(names(sort(rowMeans((allperturbations_scaled[,luminal2_refs])), decreasing = TRUE)), topN)
+# g3 <- head(names(sort(rowMeans((allperturbations_scaled[,basallike_refs])), decreasing = TRUE)), topN)
+# g4 <- head(names(sort(rowMeans((allperturbations_scaled[,tcga4_refs])), decreasing = TRUE)), topN)
+top_p_genes <- unique(c(g1,g2,g3,g4))
+# top_p_genes <- head(names(which(rowMeans((allperturbations_scaled))>=quantile(rowMeans((allperturbations_scaled)))["75%"])), 100)
+
+cormatpert <- cor((t(allperturbations_scaled[top_p_genes,names(CIT_BLCA_Subgroup)])))
+diag(cormatpert) <- 0
+cormatpert[cormatpert<0.2] <- 0
+
+thresh <- 0
+groups <- rep("A",length(rownames(cormatpert)))
+names(groups) <- rownames(cormatpert)
+groups[which(rowMeans(allperturbations_scaled[top_p_genes,])<thresh)] <- "B"
+qgpert <- qgraph(cormatpert, layout = "spring", scores = (rowMeans(allperturbations_scaled[top_p_genes,])[rownames(cormatpert)]),
+                 labels=rownames(cormatpert), theme="TeamFortress", vsize=8, repulsion = 1, groups=as.vector(groups), legend=FALSE)#, cut = 0.95, color="darkorange"
+
+par(mfrow=c(2,2))
+
+groups <- rep("A",length(rownames(cormatpert)))
+names(groups) <- rownames(cormatpert)
+groups[which(rowMeans(allperturbations_scaled[top_p_genes,luminal1_refs])<thresh)] <- "B"
+
+qgraph(qgpert, scores = abs(rowMeans(allperturbations_scaled[top_p_genes,luminal1_refs])[qgpert$graphAttributes$Nodes$labels]))
+title("Luminal-1", line = 2, cex.main = 2.5)
+
+groups <- rep("A",length(rownames(cormatpert)))
+names(groups) <- rownames(cormatpert)
+groups[which(rowMeans(allperturbations_scaled[top_p_genes,luminal2_refs])<thresh)] <- "B"
+
+qgraph(qgpert, scores = abs(rowMeans(allperturbations_scaled[top_p_genes,luminal2_refs])[qgpert$graphAttributes$Nodes$labels]))
+title("Luminal-2", line = 2, cex.main = 2.5)
+
+
+groups <- rep("A",length(rownames(cormatpert)))
+names(groups) <- rownames(cormatpert)
+groups[which(rowMeans(allperturbations_scaled[top_p_genes,basallike_refs])<thresh)] <- "B"
+
+qgraph(qgpert, layout = "spring", scores = abs(rowMeans(allperturbations_scaled[top_p_genes,basallike_refs])[qgpert$graphAttributes$Nodes$labels]))
+title("Basal-like", line = 2, cex.main = 2.5)
+
+
+groups <- rep("A",length(rownames(cormatpert)))
+names(groups) <- rownames(cormatpert)
+groups[which(rowMeans(allperturbations_scaled[top_p_genes,tcga4_refs])<thresh)] <- "B"
+
+qgraph(qgpert, layout = "spring", scores = abs(rowMeans(allperturbations_scaled[top_p_genes,tcga4_refs])[qgpert$graphAttributes$Nodes$labels]))
+title("TCGA-4", line = 2, cex.main = 2.5)
+
+
+```
+
+comparative network analysis Perturbation
+```{r}
+# #create the network
+# library("psych")
+library("qgraph")
+
+luminal1_refs <- names(CIT_BLCA_Subgroup[CIT_BLCA_Subgroup==unique(CIT_BLCA_Subgroup)[1]])
+luminal2_refs <- names(CIT_BLCA_Subgroup[CIT_BLCA_Subgroup==unique(CIT_BLCA_Subgroup)[2]])
+basallike_refs <- names(CIT_BLCA_Subgroup[CIT_BLCA_Subgroup==unique(CIT_BLCA_Subgroup)[3]])
+tcga4_refs <- names(CIT_BLCA_Subgroup[CIT_BLCA_Subgroup==unique(CIT_BLCA_Subgroup)[4]])
+
+allperturbations_scaled <- allperturbations
+# allperturbations_scaled[allperturbations_scaled>0] <- exp(allperturbations_scaled[allperturbations_scaled>0])
+# allperturbations_scaled[allperturbations_scaled<0] <- -exp(abs(allperturbations_scaled[allperturbations_scaled<0]))
+# allperturbations_scaled <- scale(allperturbations_scaled)
+
+# allperturbations_scaled <- scale(exp(abs(allperturbations)))
+
+topN <- 25
+g1 <- head(names(sort(rowMeans((allperturbations_scaled[,luminal1_refs])), decreasing = TRUE)), topN)
+g2 <- head(names(sort(rowMeans((allperturbations_scaled[,luminal2_refs])), decreasing = TRUE)), topN)
+g3 <- head(names(sort(rowMeans((allperturbations_scaled[,basallike_refs])), decreasing = TRUE)), topN)
+g4 <- head(names(sort(rowMeans((allperturbations_scaled[,tcga4_refs])), decreasing = TRUE)), topN)
+top_p_genes <- unique(c(g1,g2,g3,g4))
+# top_p_genes <- head(names(which(rowMeans((allperturbations_scaled))>=quantile(rowMeans((allperturbations_scaled)))["75%"])), 100)
+
+cormatpert <- cor(t(allperturbations_scaled[top_p_genes,names(CIT_BLCA_Subgroup)]))
+diag(cormatpert) <- 0
+cormatpert[cormatpert<0.2] <- 0
+
+###########################correlation with the alterations
+cit_cna <- read.table("/Users/dhifli/ownCloud/Latent_Net_Representations/data/CIT_Bladder_CNA.txt",sep = " ", header = TRUE, check.names = FALSE)
+cit_cna[is.na(cit_cna)] <- 0
+cit_cna_binary <- cit_cna
+cit_cna_binary[cit_cna_binary!=1] <- 0
+cit_cna_binary[cit_cna_binary==1] <- 1
+missing <- setdiff(top_p_genes, rownames(cit_cna_binary))
+if(length(missing)>0){
+  missingmat <- matrix(0L, nrow = length(missing), ncol = length(colnames(cit_cna_binary)))
+  rownames(missingmat) <- missing
+  colnames(missingmat) <- colnames(cit_cna_binary)
+  cit_cna_binary <- rbind(cit_cna_binary, missingmat)
+}
+
+
+# groups <- rep("A",length(rownames(cormatpert)))
+# names(groups) <- rownames(cormatpert)
+# groups[which(rowMeans(allperturbations_scaled[top_p_genes,])<0)] <- "B"
+qgpert <- qgraph(cormatpert, layout = "spring", scores = (rowMeans(allperturbations_scaled[top_p_genes,])[rownames(cormatpert)]),
+                 labels=rownames(cormatpert), theme="TeamFortress", vsize=8, color="darkorange", repulsion = 1)
+
+par(mfrow=c(2,2))
+
+qgraph(qgpert, scores = rowSums((cit_cna_binary[top_p_genes,intersect(colnames(cit_cna_binary),luminal1_refs)]))[qgpert$graphAttributes$Nodes$labels])
+title("Luminal-1", line = 2, cex.main = 2.5)
+
+qgraph(qgpert, scores = rowSums((cit_cna_binary[top_p_genes,intersect(colnames(cit_cna_binary),luminal2_refs)]))[qgpert$graphAttributes$Nodes$labels])
+title("Luminal-2", line = 2, cex.main = 2.5)
+
+qgraph(qgpert, layout = "spring", scores = rowSums((cit_cna_binary[top_p_genes,intersect(colnames(cit_cna_binary),basallike_refs)]))[qgpert$graphAttributes$Nodes$labels])
+title("Basal-like", line = 2, cex.main = 2.5)
+
+qgraph(qgpert, layout = "spring", scores = rowSums((cit_cna_binary[top_p_genes,intersect(colnames(cit_cna_binary),tcga4_refs)]))[qgpert$graphAttributes$Nodes$labels])
+title("TCGA-4", line = 2, cex.main = 2.5)
+
+
+```

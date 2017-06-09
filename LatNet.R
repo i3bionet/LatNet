@@ -56,7 +56,7 @@ library(parallel)
 .estimatePerturbation=function(grn,refexp,targetexp)
 {
   
-  #get all regulators (predictors) and gene (response) data and organise in a new dataframe
+  ##### get all regulators (predictors) and gene (response) data and organise in a new dataframe
   #deal with several, one or no coregulators
   act = unique(unlist(strsplit(grn[2]," ")))
   act=act[which(act!="EMPTY" & !is.na(act))]
