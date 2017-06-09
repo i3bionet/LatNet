@@ -40,13 +40,7 @@ GRN <- hLICORN(numericalExpression=cancerExp,
 activity <- .regulatorActivity(GRN, cancerExp)
 ```
 
-<!-- heatmap with influences -->
-<!-- ```{r} -->
-<!-- heatplot(influences[,names(CIT_BLCA_Subgroup)], groups = CIT_BLCA_Subgroup) -->
-<!-- heatplot(inf[,names(CIT_BLCA_Subgroup)], groups = CIT_BLCA_Subgroup) -->
-<!-- ``` -->
-
-generating perturbations
+# generating perturbations
 ```{r}
 refData <- cancerExp
 targetData <- cancerExp
@@ -61,20 +55,9 @@ print(runtime)
 nrow(allperturbations)
 ```
 
-Export all data if necessary
+# Export all data if necessary
 ```{r}
-
-ds1 <- t(cancerExp[c(targets(GRN), names(regulators(GRN))),names(CIT_BLCA_Subgroup)])
-ds1 <- data.frame("subtype"=CIT_BLCA_Subgroup, ds1)
-
-ds2 <- t(influences[,names(CIT_BLCA_Subgroup)])
-ds2 <- data.frame("subtype"=CIT_BLCA_Subgroup, ds2)
-
-ds3 <- t(allperturbations[,names(CIT_BLCA_Subgroup)])
-ds3 <- data.frame("subtype"=CIT_BLCA_Subgroup, ds3)
-
-write.csv(ds1, file = "/Users/dhifli/UsexpressionsAllCIT.csv")
-write.csv(ds2, file = "/Users/dhifli/influencesAllCIT.csv")
-write.csv(ds3, file = "/Users/dhifli/perturbationsAllCIT.csv")
+write.csv(activity, file = "/Users/dhifli/activities.csv")
+write.csv(allperturbations, file = "/Users/dhifli/perturbations.csv")
 ```
 
