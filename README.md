@@ -8,7 +8,7 @@ In the following is an example of such latent signals. We transform an input dat
 ## Quick user guide
 
 1- Load LatNet functions
-```````
+```````{r}
 yourPath <- '/home/myHomeDirectory/LatNet/'
 source(paste(yourPath,"LatNet.R", sep = ""))
 ```````
