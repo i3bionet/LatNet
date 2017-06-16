@@ -34,6 +34,6 @@ perturbations_for_MyGene = .oneGenePerturbations(MyGene, GRN, refData, targetDat
 b- Perturbations for multiple genes *AllGenes* could be estimated easily through parallel computation
 ```R
 library(parallel)
-allPerturbations <- t(simplify2array(mclapply(AllGenes, .oneGenePerturbations, GRN, refData, targetData)))
-rownames(allPerturbations) <- AllGenes
+allPerturbations = t(simplify2array(mclapply(AllGenes, .oneGenePerturbations, GRN, refData, targetData)))
+rownames(allPerturbations) = AllGenes
 ```
