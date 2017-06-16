@@ -1,5 +1,6 @@
 # LatNet
-LatNet: Latent network-based representations for large-scale gene expression data analysis
+LatNet: Latent network-based representations for large-scale gene expression data analysis.
+
 LatNet is a generic framework for deriving latent representations of input signals based on appropriate measures and a network structure that defines the relations between the features.
 
 In the following is an example of such latent signals. We transform an input dataset of gene expressions in different conditions into 1) regulator activity signals or 2) gene perturbations based on a regulatory network structure that defines the relations between the genes of the input dataset.
@@ -32,6 +33,7 @@ perturbations_for_MyGene = .oneGenePerturbations(MyGene, GRN, refData, targetDat
 ```
 b- Perturbations for multiple genes "AllGenes" could be estimated easily through parallel computation
 ```
+library(parallel)
 allPerturbations <- t(simplify2array(mclapply(AllGenes, .oneGenePerturbations, GRN, refData, targetData)))
 rownames(allPerturbations) <- AllGenes
 ```
