@@ -9,7 +9,7 @@
 
 1- Load LatNet functions
 ```R
-yourPath <- '/home/myHomeDirectory/LatNet/'
+yourPath = '/home/myHomeDirectory/LatNet/'
 source(paste(yourPath,"LatNet.R", sep = ""))
 ```
 
