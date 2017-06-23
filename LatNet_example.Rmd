@@ -39,7 +39,7 @@ activity <- .regulatorActivity(GRN, CIT_BLCA_EXP)
 ```
 
 
-# Generating perturbations for a particular target gene (for example UPK2)
+# Generating perturbations for a particular target gene
 ```{r}
 refData <- CIT_BLCA_EXP
 targetData <- CIT_BLCA_EXP
@@ -49,7 +49,7 @@ print(Gene)
 print(Gene_perturbations)
 ```
 
-# Generating perturbations
+# Generating perturbations for multiple genes (here all the targets in the network)
 ```{r}
 refData <- CIT_BLCA_EXP
 targetData <- CIT_BLCA_EXP
