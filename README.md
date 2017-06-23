@@ -29,7 +29,7 @@ activities = .regulatorActivity(GRN, refData)
 
 a- Estimate perturbations for one gene *MyGene*
 ```R
-perturbations_for_MyGene = .oneGenePerturbations(MyGene, GRN, refData, targetData)
+perturbations_for_MyGene = .oneGenePerturbations(gene = MyGene, network = GRN, refEXP = refData, targetEXP = targetData)
 ```
 b- Perturbations for multiple genes *AllGenes* could be estimated easily through parallel computation
 ```R
