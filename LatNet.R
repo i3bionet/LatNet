@@ -17,15 +17,15 @@ library(parallel)
   print(paste("computing perturbations for gene ",gene))
   
   ##### compute the RMSE and get the best GRN in case multiple networks exist for the same gene (the case of some regulatory network inference methods like HLICORN)
-  # listedgrn <- data.frame(t(network@GRN[which(network@GRN$Target==gene),1:3]),stringsAsFactors=FALSE)
-  # results=lapply(listedgrn,.fitGRNcv,exp=refEXP)
-  # # results=mclapply(listedgrn,.fitGRNcv,exp=refEXP, mc.cores = 2)
-  # bestgrn <- listedgrn[which.min(sapply(results,f <- function(x){return(unlist(x)["RMSE"])}))]
+  listedgrn <- data.frame(t(network@GRN[which(network@GRN$Target==gene),1:3]),stringsAsFactors=FALSE)
+  results=lapply(listedgrn,.fitGRNcv,exp=refEXP)
+  # results=mclapply(listedgrn,.fitGRNcv,exp=refEXP, mc.cores = 2)
+  bestgrn <- listedgrn[which.min(sapply(results,f <- function(x){return(unlist(x)["RMSE"])}))]
   
   ##### or take it directly from networks infered with the hLicorn method using the CoRegNet R package (help saving computation time)
-  listedgrn <- data.frame(network@GRN[which(network@GRN$Target==gene),],stringsAsFactors=FALSE)
-  bestgrn <- t(listedgrn[which.min(listedgrn$RMSE),1:3])
-  
+  # listedgrn <- data.frame(network@GRN[which(network@GRN$Target==gene),],stringsAsFactors=FALSE)
+  # bestgrn <- t(listedgrn[which.min(listedgrn$RMSE),1:3])
+  print(bestgrn)
   ##### estimate the gene perturbation score 
   perturbation <-  .estimatePerturbation(grn = unlist(bestgrn), refexp = refEXP, targetexp=targetEXP)
   
@@ -58,9 +58,16 @@ library(parallel)
   
   ##### get all regulators (predictors) and gene (response) data and organise in a new dataframe
   #deal with several, one or no coregulators
-  act = unique(unlist(strsplit(grn[2]," ")))
+  act <- grn[2]
+  if(act!="EMPTY" & !is.na(act)){
+    act = unique(unlist(strsplit(grn[2]," ")))
+  }
   act=act[which(act!="EMPTY" & !is.na(act))]
-  rep = unique(unlist(strsplit(grn[3]," ")))
+  
+  rep <- grn[3]
+  if(rep!="EMPTY" & !is.na(rep)){
+    rep = unique(unlist(strsplit(grn[3]," ")))
+  }
   rep=rep[which(rep!="EMPTY" & !is.na(rep))]
   
   if(!(all(c(act,rep) %in% colnames(refexp)) && all(c(act,rep) %in% colnames(targetexp)))){
@@ -86,6 +93,7 @@ library(parallel)
   
   # da contains all the necessary data with the first column y as the gene, response variable
   Y=refexp[,grn[1]]
+  print(grn[1])
   da = data.frame("y"= Y,X)
   # get fitted lm, coefficients and fitted values
   l=lm("y~.",da)
@@ -153,10 +161,23 @@ library(parallel)
 {
   #get all regulators (predictors) and gene (response) data and organise in a new dataframe
   #deal with several, one or no coregulators
-  act = unique(unlist(strsplit(grn[2]," ")))
+  act <- grn[2]
+  if(act!="EMPTY" & !is.na(act)){
+    act = unique(unlist(strsplit(grn[2]," ")))
+  }
   act=act[which(act!="EMPTY" & !is.na(act))]
-  rep = unique(unlist(strsplit(grn[3]," ")))
+  
+  rep <- grn[3]
+  if(rep!="EMPTY" & !is.na(rep)){
+    rep = unique(unlist(strsplit(grn[3]," ")))
+  }
   rep=rep[which(rep!="EMPTY" & !is.na(rep))]
+  
+  if(!(all(c(act,rep) %in% colnames(exp)) && all(c(act,rep) %in% colnames(exp)))){
+    print(paste("Couldn't compute perturbation for: ", grn[1], ". One or multiple of its regulators were not found in the reference expression data."))
+    return()
+  }
+  
   X = exp[,c(act,rep)]
   
   if(length(act)>1){

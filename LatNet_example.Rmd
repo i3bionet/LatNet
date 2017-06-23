@@ -3,16 +3,14 @@ title: "LatNet analysis"
 output: html_notebook
 ---
 
-# load test data from the CoRegNet package
+# Load test data from the CoRegNet package
 ```{r}
 library(CoRegNet)
 data("CIT_BLCA_EXP")
-normal_samples <- which(grepl('^CITN', colnames(CIT_BLCA_EXP)))
-cancerExp <- CIT_BLCA_EXP[,-normal_samples]
-dim(cancerExp)
+dim(CIT_BLCA_EXP)
 ```
 
-# load LatNet functions (YOU SHOULD SET YOUR OWN PATH)
+# Load LatNet functions (YOU SHOULD SET YOUR OWN PATH)
 ```{r}
 LatNet_Path <- '~/Documents/GitHub/LatNet/LatNet.R'
 source(LatNet_Path)
@@ -24,9 +22,9 @@ source(LatNet_Path)
 # Load list of Human transcription factors
 data(HumanTF)
  
-# you can set the option parallel="multicore" to accelerate the inference in case you have a multicore computing infrastructure
 # Generate the network 
-GRN <- hLICORN(numericalExpression=cancerExp,
+# you can set the option parallel="multicore" to accelerate the inference in case you have a multicore computing infrastructure
+GRN <- hLICORN(numericalExpression=CIT_BLCA_EXP,
                TFlist = HumanTF,
                minGeneSupport = 0.2,
                minCoregSupport=0.2,
@@ -35,18 +33,29 @@ GRN <- hLICORN(numericalExpression=cancerExp,
                parallel = "no")
 ```
 
-# generating regulator activity signals
+# Generating regulator activity signals
 ```{r}
-activity <- .regulatorActivity(GRN, cancerExp)
+activity <- .regulatorActivity(GRN, CIT_BLCA_EXP)
 ```
 
-# generating perturbations
+
+# Generating perturbations for a particular target gene (for example UPK2)
 ```{r}
-refData <- cancerExp
-targetData <- cancerExp
+refData <- CIT_BLCA_EXP
+targetData <- CIT_BLCA_EXP
+Gene <- targets(GRN)[1]
+Gene_perturbations <- .oneGenePerturbations(gene = Gene, network = network, refEXP = t(refData), targetEXP = t(targetData))
+print(Gene)
+print(Gene_perturbations)
+```
+
+# Generating perturbations
+```{r}
+refData <- CIT_BLCA_EXP
+targetData <- CIT_BLCA_EXP
 allperturbations.raw <- t(simplify2array(mclapply(targets(GRN), .oneGenePerturbations, GRN, t(refData), t(targetData), 0)))#, mc.cores = 3
 rownames(allperturbations.raw) <- targets(GRN)
-#remove the one having 0 everywhere
+#remove the ones having 0 everywhere
 allperturbations <- allperturbations.raw[-which(rowSums(allperturbations.raw)==0),]
 ```
 
