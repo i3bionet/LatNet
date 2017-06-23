@@ -25,7 +25,7 @@ library(parallel)
   ##### or take it directly from networks infered with the hLicorn method using the CoRegNet R package (help saving computation time)
   # listedgrn <- data.frame(network@GRN[which(network@GRN$Target==gene),],stringsAsFactors=FALSE)
   # bestgrn <- t(listedgrn[which.min(listedgrn$RMSE),1:3])
-  print(bestgrn)
+
   ##### estimate the gene perturbation score 
   perturbation <-  .estimatePerturbation(grn = unlist(bestgrn), refexp = refEXP, targetexp=targetEXP)
   
@@ -93,7 +93,6 @@ library(parallel)
   
   # da contains all the necessary data with the first column y as the gene, response variable
   Y=refexp[,grn[1]]
-  print(grn[1])
   da = data.frame("y"= Y,X)
   # get fitted lm, coefficients and fitted values
   l=lm("y~.",da)
@@ -118,15 +117,6 @@ library(parallel)
   numscores.Target.pred = predict(l,targetX)
   numscores.Target.perturbation = numscores.Target.pred-y
   numscores.Target.perturbationPercentage = abs(numscores.Target.perturbation/numscores.Target.pred)
-  
-  # #test Remy's method on checking conserved gene networks
-  # l=lm("y~.",data.frame(y, targetX))
-  # ft=l$fitted.values
-  # rs = y-fitted
-  # RMSE = sqrt(sum(( (rs) ^2) )/length( ft))
-  # print(summary(l)$r.squared)
-  # if(RMSE>0.5) return()
-  # # if(summary(l)$r.squared <= 0.5) return()
   
   if(length(act)==0){
     numscores.Coef.Acts=NA

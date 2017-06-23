@@ -30,7 +30,7 @@ GRN <- hLICORN(numericalExpression=CIT_BLCA_EXP,
                minCoregSupport=0.2,
                maxCoreg = 3,
                verbose = TRUE,
-               parallel = "no")
+               parallel = "multicore")
 ```
 
 # Generating regulator activity signals
@@ -44,7 +44,7 @@ activity <- .regulatorActivity(GRN, CIT_BLCA_EXP)
 refData <- CIT_BLCA_EXP
 targetData <- CIT_BLCA_EXP
 Gene <- targets(GRN)[1]
-Gene_perturbations <- .oneGenePerturbations(gene = Gene, network = network, refEXP = t(refData), targetEXP = t(targetData))
+Gene_perturbations <- .oneGenePerturbations(gene = Gene, network = GRN, refEXP = t(refData), targetEXP = t(targetData))
 print(Gene)
 print(Gene_perturbations)
 ```
