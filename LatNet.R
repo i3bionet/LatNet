@@ -19,7 +19,12 @@ library(parallel)
   ##### compute the RMSE and get the best GRN in case multiple networks exist for the same gene (the case of some regulatory network inference methods like HLICORN)
   listedgrn <- data.frame(t(network@GRN[which(network@GRN$Target==gene),1:3]),stringsAsFactors=FALSE)
   results=lapply(listedgrn,.fitGRNcv,exp=refEXP)
+  if(is.null(unlist(results))) return(l)
   # results=mclapply(listedgrn,.fitGRNcv,exp=refEXP, mc.cores = 2)
+  # print(results)
+  # print(is.null(unlist(results)))
+  results <- results[unlist(lapply(results,f <- function(x){return("RMSE" %in% names(x))}))]
+  if(is.null(unlist(results))) return(l)
   bestgrn <- listedgrn[which.min(sapply(results,f <- function(x){return(unlist(x)["RMSE"])}))]
   
   ##### or take it directly from networks infered with the hLicorn method using the CoRegNet R package (help saving computation time)
@@ -60,15 +65,15 @@ library(parallel)
   #deal with several, one or no coregulators
   act <- grn[2]
   if(act!="EMPTY" & !is.na(act)){
-    act = unique(unlist(strsplit(grn[2]," ")))
+    act = unique(unlist(strsplit(unlist(act)," ")))
   }
   act=act[which(act!="EMPTY" & !is.na(act))]
   
   rep <- grn[3]
   if(rep!="EMPTY" & !is.na(rep)){
-    rep = unique(unlist(strsplit(grn[3]," ")))
+    rep = unique(unlist(strsplit(rep," ")))
   }
-  rep=rep[which(rep!="EMPTY" & !is.na(rep))]
+  rep=rep[which(rep!="EMPTY" & !is.na(unlist(rep)))]
   
   if(!(all(c(act,rep) %in% colnames(refexp)) && all(c(act,rep) %in% colnames(targetexp)))){
     print(paste("Couldn't compute perturbation for: ", grn[1], ". One or multiple of its regulators were not found in the reference or the target expression data."))
@@ -152,14 +157,15 @@ library(parallel)
   #get all regulators (predictors) and gene (response) data and organise in a new dataframe
   #deal with several, one or no coregulators
   act <- grn[2]
+  # print(unlist(act))
   if(act!="EMPTY" & !is.na(act)){
-    act = unique(unlist(strsplit(grn[2]," ")))
+    act = unique(unlist(strsplit(unlist(act)," ")))
   }
   act=act[which(act!="EMPTY" & !is.na(act))]
   
   rep <- grn[3]
   if(rep!="EMPTY" & !is.na(rep)){
-    rep = unique(unlist(strsplit(grn[3]," ")))
+    rep = unique(unlist(strsplit(unlist(rep)," ")))
   }
   rep=rep[which(rep!="EMPTY" & !is.na(rep))]
   
