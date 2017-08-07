@@ -15,7 +15,7 @@ source(paste(yourPath,"LatNet.R", sep = ""))
 
 2- Load your network structure (a gene regulatory network in this example), your reference data that define the reference state and your target data on which you want to measure gene perturbations
 ```R
-GRN = your_regulator_network
+GRN = your_regulatory_network
 refData = your_reference_data
 targetData = your_target_data
 ```
